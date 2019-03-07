@@ -23,6 +23,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as BL
 import Data.Char (toLower)
+import Conduit (MonadUnliftIO)
 import Data.Conduit
 import Data.Int (Int64)
 import Data.String (fromString)
@@ -37,6 +38,7 @@ import Network.HTTP.Simple
 import System.Random (randomIO)
 import Text.XML
 import Text.XML.Cursor
+import Control.Monad.IO.Class
 
 type UnixTime = CTime
 type UniqueId = Word32
@@ -134,40 +136,40 @@ parseContents bin =
                     ["symlink"]:[name]:_ -> [Symlink name]
                     _ -> []
 
-mkReq :: Auth -> ByteString -> ByteString -> Action -> IO Request
+mkReq :: MonadUnliftIO m => Auth -> ByteString -> ByteString -> Action -> m Request
 mkReq auth method path action = do
   let path' = "/" <> BC.pack (show (authCpCode auth)) <> "/" <> path
-  initReq <- parseRequest $ BC.unpack $ method <> " "
+  initReq <- liftIO $ parseRequest $ BC.unpack $ method <> " "
     <> (if authSsl auth then "https" else "http")
     <> "://" <> (T.encodeUtf8 (authHostname auth))
     <> path'
-  ut <- (getUnixTime >>= return.utSeconds)
-  uid <- (randomIO >>= return.(\v -> v `mod` 10000))
+  ut <- liftIO $ (getUnixTime >>= return.utSeconds)
+  uid <- liftIO (randomIO >>= return.(\v -> v `mod` 10000))
   return $ setRequestHeaders (authHeaders ut uid (authKeyName auth) path' action (authKey auth)) initReq
 
-download :: Auth -> NetStoragePath -> ((Response () -> ConduitM ByteString Void IO a)) -> IO a
+download :: MonadUnliftIO m => Auth -> NetStoragePath -> ((Response () -> ConduitM ByteString Void m a)) -> m a
 download auth path fn = do
   req <- mkReq auth "GET" path "version=1&action=download"
   httpSink req fn
 
-dir :: Auth -> NetStoragePath -> IO (Either SomeException [Contents])
+dir :: MonadUnliftIO m => Auth -> NetStoragePath -> m (Either SomeException [Contents])
 dir auth path = do
   req <- mkReq auth "GET" path "version=1&action=dir&format=xml"
   res <- httpBS req
   return $ parseContents $ responseBody res
 
-stat :: Auth -> NetStoragePath -> IO (Either SomeException [Contents])
+stat :: MonadUnliftIO m => Auth -> NetStoragePath -> m (Either SomeException [Contents])
 stat auth path = do
   req <- mkReq auth "GET" path "version=1&action=stat&format=xml"
   res <- httpBS req
   return $ parseContents $ responseBody res
 
-delete :: Auth -> NetStoragePath -> IO (Response ByteString)
+delete :: MonadUnliftIO m => Auth -> NetStoragePath -> m (Response ByteString)
 delete auth path = do
   req <- mkReq auth "POST" path "version=1&action=delete"
   httpBS req
 
-upload :: Auth -> NetStoragePath -> Int64 -> (ConduitM () ByteString IO ()) -> IO (Response ByteString)
+upload :: MonadUnliftIO m => Auth -> NetStoragePath -> Int64 -> (ConduitM () ByteString IO ()) -> m (Response ByteString)
 upload auth path size fn = do
   initReq <- mkReq auth "PUT" path "version=1&action=upload&upload-type=binary"
   let req = setRequestBodySource size fn initReq

@@ -1,5 +1,5 @@
 name:                hsakamai
-version:             0.1.0.0
+version:             0.1.0.1
 github:              "junjihashimoto/hsakamai"
 license:             BSD3
 author:              "Junji Hashimoto"
@@ -17,7 +17,7 @@ category:            Web
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/githubuser/hsakamai#readme>
+description:         Please see the README on GitHub at <https://github.com/junjihashimoto/hsakamai#readme>
 
 dependencies:
 - base >= 4.7 && < 5
@@ -84,3 +84,7 @@ tests:
     dependencies:
     - hsakamai
     - doctest
+
+default-extensions:
+  - Strict
+  - StrictData
